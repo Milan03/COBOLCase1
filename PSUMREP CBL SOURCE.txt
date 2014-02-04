@@ -1,0 +1,422 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID.  PSUMREP.
+       AUTHOR.      MILAN.
+      *************************************************************
+      *                       FANSHAWE COLLEGE                    *
+      *                                                           *
+      *                  COBOL Z/OS PROGRAM DESCRIPTION           *
+      *************************************************************
+      * PROGRAM DESCRIPTION:                                      *
+      *    This program takes in a document of salesperson        *
+      *    information consisting of each salesperson's           *
+      *    records and summerisez the branch and company totals   *
+      *                                                           *
+      * INPUT DD  NAME     FILE IDENTIFIER     FILE DESCRIPTION   *
+      * --------------     ---------------     ----------------   *
+      * SLSPMAST           SALESMAST           File containing    *
+      *                                        salesperson info   *
+      *                                                           *
+      * OUTPUT DD  NAME    FILE IDENTIFIER     FILE DESCRITION    *
+      * ---------------    ---------------     ---------------    *
+      * SALESRPT           PRNT                Print file summer- *
+      *                                        izing information  *
+      *                                                           *
+      * COPYBOOKS          DESCRIPTION                            *
+      * ---------          -----------                            *
+      * CCS1SLP            Fields required for individual sales-  *
+      *                    person information input               *
+      *************************************************************
+      *************************************************************
+      *                 C H A N G E   L O G                       *
+      *************************************************************
+      *                                                           *
+      * VER. NO.  CHANGED BY   IMPLEMENTATION DATE                *
+      * --------  ----------   -------------------                *
+      *                                                           *
+      * DESCRIPTION OF CHANGE:                                    *
+      * ----------------------                                    *
+      *                                                           *
+      *************************************************************
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT SALESMAST ASSIGN TO SLINPUT
+               FILE STATUS IS WS-IN-STATUS.
+
+           SELECT SALESRPT ASSIGN TO PRNT.
+
+       DATA DIVISION.
+
+       FILE SECTION.
+       FD  SALESMAST
+           RECORDING MODE IS F.
+
+       COPY CCS1SLP.
+
+       FD  SALESRPT
+           RECORDING MODE IS F.
+
+       01  PRINT-AREA                 PIC X(125).
+
+       WORKING-STORAGE SECTION.
+       01  WS-SWITCHES.
+           05  WS-SLSMST-EOF-SWITCH   PIC X        VALUE "N".
+               88  WS-SLSMST-EOF                   VALUE "Y".
+               88  WS-SLSMST-NOT-EOF               VALUE "N".
+
+       01  WS-CURRENT-DATE.
+           05  WS-CD-YEAR             PIC X(4).
+           05  WS-CD-MONTH            PIC XX.
+           05  WS-CD-DAY              PIC XX.
+
+       01  WS-RATING-VALUES.
+           05  FILLER                 PIC X(4)   VALUE X"0000000C".
+           05  FILLER                 PIC X(4)   VALUE X"1999999C".
+           05  FILLER                 PIC X(5)   VALUE "    *".
+           05  FILLER                 PIC X(4)   VALUE X"2000000C".
+           05  FILLER                 PIC X(4)   VALUE X"3999999C".
+           05  FILLER                 PIC X(5)   VALUE "   **".
+           05  FILLER                 PIC X(4)   VALUE X"4000000C".
+           05  FILLER                 PIC X(4)   VALUE X"5999999C".
+           05  FILLER                 PIC X(5)   VALUE "  ***".
+           05  FILLER                 PIC X(4)   VALUE X"6000000C".
+           05  FILLER                 PIC X(4)   VALUE X"7999999C".
+           05  FILLER                 PIC X(5)   VALUE " ****".
+           05  FILLER                 PIC X(4)   VALUE X"8000000C".
+           05  FILLER                 PIC X(4)   VALUE X"9999999C".
+           05  FILLER                 PIC X(5)   VALUE "*****".
+
+       01  WS-RATING-TABLE REDEFINES WS-RATING-VALUES.
+           05  WS-RATING-GROUP OCCURS 5 TIMES.
+               10  WS-SLSRNG-MIN-VAL  PIC 9(5)V99 COMP-3.
+               10  WS-SLSRNG-MAX-VAL  PIC 9(5)V99 COMP-3.
+               10  WS-STAR-RATING     PIC X(5).
+
+       01  WS-UNEDITED-FIELDS.
+           05  WS-NET-SLS             PIC 9(6)V99 COMP-3 VALUE ZERO.
+           05  WS-COMM-ERND           PIC 9(5)V99 COMP-3 VALUE ZERO.
+           05  WS-BRN-GRS-TTL         PIC 9(7)V99 COMP-3 VALUE ZERO.
+           05  WS-BRN-RTRN-TTL        PIC 9(5)V99 COMP-3 VALUE ZERO.
+           05  WS-BRN-NET-TTL         PIC 9(7)V99 COMP-3 VALUE ZERO.
+           05  WS-BRN-COMM-TTL        PIC 9(5)V99 COMP-3 VALUE ZERO.
+           05  WS-CMPY-GRS-TTL        PIC 9(7)V99 COMP-3 VALUE ZERO.
+           05  WS-CMPY-RTRN-TTL       PIC 9(6)V99 COMP-3 VALUE ZERO.
+           05  WS-CMPY-NET-TTL        PIC 9(7)V99 COMP-3 VALUE ZERO.
+           05  WS-CMPY-COMM-TTL       PIC 9(6)V99 COMP-3 VALUE ZERO.
+           05  WS-HL1-PAGENO          PIC 9(2)    COMP-3 VALUE ZERO.
+           05  WS-CURR-BRN-NO         PIC 9(3)    COMP-3 VALUE ZERO.
+           05  WS-SLSPRSN-COUNT       PIC 9(2)    COMP-3 VALUE ZERO.
+           05  WS-RATING-SUB          PIC 9(2)    COMP.
+
+       01  WS-HEADING-LINE-1.
+           05  FILLER                 PIC X(6)     VALUE "PAGE  ".
+           05  WS-HL1-PAGENO-ST       PIC Z9.
+           05  FILLER                 PIC X(35)    VALUE SPACES.
+           05  FILLER                 PIC X(4)     VALUE "ABC ".
+           05  FILLER                 PIC X(4)     VALUE "CORP".
+           05  FILLER                 PIC X(36)    VALUE SPACES.
+           05  WS-HL1-MONTH           PIC 9(2).
+           05  FILLER                 PIC X(1)     VALUE "/".
+           05  WS-HL1-DAY             PIC 9(2).
+           05  FILLER                 PIC X(1)     VALUE "/".
+           05  WS-HL1-YEAR            PIC 9(4).
+
+       01  WS-HEADING-LINE-2.
+           05  FILLER                 PIC X(39)    VALUE SPACES.
+           05  FILLER                 PIC X(5)     VALUE "SALES".
+           05  FILLER                 PIC X(7)     VALUE "PERSON ".
+           05  FILLER                 PIC X(3)     VALUE "BY ".
+           05  FILLER                 PIC X(6)     VALUE "BRANCH".
+
+       01  WS-BRANCH-INDICATOR-3.
+           05  FILLER                 PIC X(8)     VALUE "BRANCH: ".
+           05  WS-SLSPRSN-BRN-NO      PIC 9(3).
+
+       01  WS-COLUMN-HEADING-4.
+           05  FILLER                 PIC X(5)     VALUE "LAST ".
+           05  FILLER                 PIC X(4)     VALUE "NAME".
+           05  FILLER                 PIC X(6)     VALUE SPACES.
+           05  FILLER                 PIC X(6)     VALUE "FIRST ".
+           05  FILLER                 PIC X(4)     VALUE "NAME".
+           05  FILLER                 PIC X(6)     VALUE SPACES.
+           05  FILLER                 PIC X(6)     VALUE "GROSS ".
+           05  FILLER                 PIC X(5)     VALUE "SALES".
+           05  FILLER                 PIC X(8)     VALUE SPACES.
+           05  FILLER                 PIC X(7)     VALUE "RETURNS".
+           05  FILLER                 PIC X(7)     VALUE SPACES.
+           05  FILLER                 PIC X(4)     VALUE "NET ".
+           05  FILLER                 PIC X(5)     VALUE "SALES".
+           05  FILLER                 PIC X(3)     VALUE SPACES.
+           05  FILLER                 PIC X(5)     VALUE "COMMI".
+           05  FILLER                 PIC X(6)     VALUE "ISSION".
+           05  FILLER                 PIC X(4)     VALUE SPACES.
+           05  FILLER                 PIC X(6)     VALUE "RATING".
+
+       01  WS-DETAIL-LINE-5.
+           05  WS-SLSPRSN-LNAME       PIC X(15).
+           05  WS-SLSPRSN-FNAME       PIC X(10).
+           05  FILLER                 PIC X(7)     VALUE SPACES.
+           05  WS-SLSPRSN-GRS-SLS     PIC $$$,$$$.99.
+           05  FILLER                 PIC X(6)     VALUE SPACES.
+           05  WS-SLSPRSN-RTRN-SLS    PIC $$,$$$.99.
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  WS-NET-CALC            PIC $$$$,$$$.99.
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  WS-COMM-ERND-ST        PIC $$,$$$.99.
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  WS-SLSPRSN-RT-ST       PIC X(5).
+
+       01  WS-BRANCH-TOTAL-6.
+           05  FILLER                 PIC X(6)     VALUE "TOTAL ".
+           05  FILLER                 PIC X(4)     VALUE "FOR ".
+           05  FILLER                 PIC X(8)     VALUE "BRANCH: ".
+           05  WS-SLSPRSN-BRN-NUM     PIC 9(3).
+           05  FILLER                 PIC X(8)    VALUE SPACES.
+           05  WS-BRN-GRS-TTL-ST      PIC $$,$$$,$$$.99.
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  WS-BRN-RTRN-TTL-ST     PIC $$$,$$$.99.
+           05  FILLER                 PIC X(3)     VALUE SPACES.
+           05  WS-BRN-NET-TTL-ST      PIC $$,$$$,$$$.99.
+           05  FILLER                 PIC X(4)     VALUE SPACES.
+           05  WS-BRN-CM-TTL-ST       PIC $$$,$$$.99.
+
+       01  WS-SINGLE-SPACES-7.
+           05  FILLER                 PIC X(30)    VALUE SPACES.
+           05  FILLER                 PIC X(6)     VALUE "------".
+           05  FILLER                 PIC X(6)     VALUE "------".
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  FILLER                 PIC X(5)     VALUE "-----".
+           05  FILLER                 PIC X(5)     VALUE "-----".
+           05  FILLER                 PIC X(4)     VALUE SPACES.
+           05  FILLER                 PIC X(6)     VALUE "------".
+           05  FILLER                 PIC X(6)     VALUE "------".
+           05  FILLER                 PIC X(4)     VALUE SPACES.
+           05  FILLER                 PIC X(5)     VALUE "-----".
+           05  FILLER                 PIC X(5)     VALUE "-----".
+
+       01  WS-COMPANY-TOTALS-8.
+           05  FILLER                 PIC X(8)     VALUE "COMPANY ".
+           05  FILLER                 PIC X(6)     VALUE "TOTALS".
+           05  FILLER                 PIC X(15)    VALUE SPACES.
+           05  WS-CMPY-GRS-TTL-ST     PIC $$,$$$,$$$.99.
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  WS-CMPY-RTRN-TTL-ST    PIC $$$,$$$.99.
+           05  FILLER                 PIC X(3)     VALUE SPACES.
+           05  WS-CMPY-NET-TTL-ST     PIC $$,$$$,$$$.99.
+           05  FILLER                 PIC X(3)     VALUE SPACES.
+           05  WS-CMPY-COMM-TTL-ST    PIC $$$$,$$$.99.
+
+       01  WS-DOUBLE-LINES-9.
+           05  FILLER                 PIC X(28)    VALUE SPACES.
+           05  FILLER                 PIC X(7)     VALUE "=======".
+           05  FILLER                 PIC X(7)     VALUE "=======".
+           05  FILLER                 PIC X(5)     VALUE SPACES.
+           05  FILLER                 PIC X(5)     VALUE "=====".
+           05  FILLER                 PIC X(5)     VALUE "=====".
+           05  FILLER                 PIC X(2)     VALUE SPACES.
+           05  FILLER                 PIC X(7)     VALUE "=======".
+           05  FILLER                 PIC X(7)     VALUE "=======".
+           05  FILLER                 PIC X(3)     VALUE SPACES.
+           05  FILLER                 PIC X(5)     VALUE "=====".
+           05  FILLER                 PIC X(6)     VALUE "======".
+
+       01  MISC.
+           05  EOF-I                  PIC 9        VALUE ZERO.
+           05  WS-IN-STATUS           PIC XX       VALUE SPACES.
+
+       PROCEDURE DIVISION.
+       A000-MAINLINE.
+           OPEN INPUT SALESMAST
+                OUTPUT SALESRPT.
+           IF WS-IN-STATUS NOT EQUAL "00"
+               THEN DISPLAY "File Error: ", WS-IN-STATUS
+           ELSE
+               PERFORM B000-INITIALIZATION
+               PERFORM C000-PROCESSING
+               CLOSE SALESMAST
+                     SALESRPT
+           END-IF.
+           STOP RUN.
+
+       B000-INITIALIZATION.
+           PERFORM U000-FORMAT-DATE.
+
+       C000-PROCESSING.
+           PERFORM U300-SLSPRSN-REPORT-LOOP
+               UNTIL WS-SLSMST-EOF.
+
+       U000-FORMAT-DATE.
+           ACCEPT WS-CURRENT-DATE FROM DATE YYYYMMDD.
+           MOVE WS-CD-MONTH             TO WS-HL1-MONTH.
+           MOVE WS-CD-DAY               TO WS-HL1-DAY.
+           MOVE WS-CD-YEAR              TO WS-HL1-YEAR.
+
+       W000-PRINT-HEADERS.
+           COMPUTE
+               WS-HL1-PAGENO = WS-HL1-PAGENO + 1.
+           MOVE WS-HL1-PAGENO           TO WS-HL1-PAGENO-ST.
+           MOVE SLSPRSN-BRN-NO          TO WS-SLSPRSN-BRN-NO.
+           MOVE WS-HEADING-LINE-1       TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING PAGE.
+           MOVE WS-HEADING-LINE-2       TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+           MOVE WS-BRANCH-INDICATOR-3   TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+           MOVE WS-COLUMN-HEADING-4     TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+
+       W100-MOVE-SLSPRSN.
+           MOVE SLSPRSN-LNAME           TO WS-SLSPRSN-LNAME.
+           MOVE SLSPRSN-FNAME           TO WS-SLSPRSN-FNAME.
+           MOVE SLSPRSN-GRS-SLS         TO WS-SLSPRSN-GRS-SLS.
+           MOVE SLSPRSN-RTRN-SLS        TO WS-SLSPRSN-RTRN-SLS.
+           MOVE WS-DETAIL-LINE-5        TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+
+       U100-SLSPRSN-CALCULATIONS.
+           COMPUTE
+               WS-NET-SLS = SLSPRSN-GRS-SLS - SLSPRSN-RTRN-SLS.
+           MOVE WS-NET-SLS TO WS-NET-CALC.
+           COMPUTE
+               WS-COMM-ERND ROUNDED =
+                   (SLSPRSN-GRS-SLS - SLSPRSN-RTRN-SLS)
+                   * SLSPRSN-COMM-RT.
+           MOVE WS-COMM-ERND            TO WS-COMM-ERND-ST.
+           PERFORM WITH TEST AFTER
+               VARYING WS-RATING-SUB FROM 1 BY 1 UNTIL
+                   WS-NET-SLS > WS-SLSRNG-MIN-VAL (WS-RATING-SUB)
+                   AND
+                   WS-NET-SLS < WS-SLSRNG-MAX-VAL (WS-RATING-SUB)
+               MOVE WS-STAR-RATING (WS-RATING-SUB)
+                   TO WS-SLSPRSN-RT-ST
+           END-PERFORM.
+
+       U200-BRANCH-CALCULATIONS.
+           IF WS-BRN-GRS-TTL = 0 THEN
+               COMPUTE
+                   WS-BRN-GRS-TTL = SLSPRSN-GRS-SLS
+           ELSE
+               COMPUTE
+                   WS-BRN-GRS-TTL = WS-BRN-GRS-TTL + SLSPRSN-GRS-SLS
+           END-IF.
+           IF WS-BRN-RTRN-TTL = 0 THEN
+               COMPUTE
+                   WS-BRN-RTRN-TTL = SLSPRSN-RTRN-SLS
+           ELSE
+               COMPUTE
+                   WS-BRN-RTRN-TTL = WS-BRN-RTRN-TTL
+                       + SLSPRSN-RTRN-SLS
+           END-IF.
+           IF WS-BRN-NET-TTL = 0 THEN
+               COMPUTE
+                   WS-BRN-NET-TTL = WS-NET-SLS
+           ELSE
+               COMPUTE
+                   WS-BRN-NET-TTL = WS-BRN-NET-TTL + WS-NET-SLS
+           END-IF.
+           IF WS-BRN-COMM-TTL = 0 THEN
+               COMPUTE
+                   WS-BRN-COMM-TTL = WS-COMM-ERND
+           ELSE
+               COMPUTE
+                   WS-BRN-COMM-TTL = WS-BRN-COMM-TTL + WS-COMM-ERND
+           END-IF.
+
+       W200-MOVE-BRANCH-TOTALS.
+           MOVE WS-CURR-BRN-NO          TO WS-SLSPRSN-BRN-NUM.
+           MOVE WS-BRN-GRS-TTL          TO WS-BRN-GRS-TTL-ST.
+           MOVE WS-BRN-RTRN-TTL         TO WS-BRN-RTRN-TTL-ST.
+           MOVE WS-BRN-NET-TTL          TO WS-BRN-NET-TTL-ST.
+           MOVE WS-BRN-COMM-TTL         TO WS-BRN-CM-TTL-ST.
+           MOVE WS-BRANCH-TOTAL-6       TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+           PERFORM W300-BRANCH-LINE.
+
+       U300-SLSPRSN-REPORT-LOOP.
+           PERFORM R000-READ-SLSPRSN-RCRD.
+           IF WS-SLSMST-NOT-EOF THEN
+               IF WS-SLSPRSN-COUNT = 1 THEN
+                   MOVE SLSPRSN-BRN-NO  TO WS-CURR-BRN-NO
+                   PERFORM W000-PRINT-HEADERS
+                   PERFORM U100-SLSPRSN-CALCULATIONS
+                   PERFORM U200-BRANCH-CALCULATIONS
+                   PERFORM W100-MOVE-SLSPRSN
+               ELSE
+                   IF WS-CURR-BRN-NO NOT EQUAL SLSPRSN-BRN-NO
+                       PERFORM U400-CONTROL-BREAK
+                   ELSE
+                       PERFORM U100-SLSPRSN-CALCULATIONS
+                       PERFORM W100-MOVE-SLSPRSN
+                       PERFORM U200-BRANCH-CALCULATIONS
+           ELSE
+               PERFORM W200-MOVE-BRANCH-TOTALS
+               PERFORM U500-COMPANY-SUBTOTALS
+               PERFORM W400-MOVE-COMPANY-TOTALS
+               PERFORM W500-DOUBLE-LINES.
+
+       W300-BRANCH-LINE.
+           MOVE WS-SINGLE-SPACES-7      TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+
+       U400-CONTROL-BREAK.
+           PERFORM W200-MOVE-BRANCH-TOTALS.
+           PERFORM U500-COMPANY-SUBTOTALS.
+           PERFORM W000-PRINT-HEADERS.
+           MOVE 0                       TO WS-BRN-GRS-TTL.
+           MOVE 0                       TO WS-BRN-RTRN-TTL.
+           MOVE 0                       TO WS-BRN-NET-TTL.
+           MOVE 0                       TO WS-BRN-COMM-TTL.
+           MOVE 0                       TO WS-NET-SLS.
+           MOVE 0                       TO WS-COMM-ERND.
+           MOVE SLSPRSN-BRN-NO          TO WS-CURR-BRN-NO.
+           PERFORM U100-SLSPRSN-CALCULATIONS.
+           PERFORM W100-MOVE-SLSPRSN.
+           PERFORM U200-BRANCH-CALCULATIONS.
+
+       U500-COMPANY-SUBTOTALS.
+           IF WS-CMPY-GRS-TTL = 0 THEN
+               COMPUTE
+                   WS-CMPY-GRS-TTL = WS-BRN-GRS-TTL
+           ELSE
+               COMPUTE
+                   WS-CMPY-GRS-TTL = WS-CMPY-GRS-TTL + WS-BRN-GRS-TTL.
+           IF WS-CMPY-RTRN-TTL = 0 THEN
+               COMPUTE
+                   WS-CMPY-RTRN-TTL = WS-BRN-RTRN-TTL
+           ELSE
+               COMPUTE
+                   WS-CMPY-RTRN-TTL = WS-CMPY-RTRN-TTL
+                       + WS-BRN-RTRN-TTL.
+           IF WS-CMPY-NET-TTL = 0 THEN
+               COMPUTE
+                   WS-CMPY-NET-TTL = WS-BRN-NET-TTL
+           ELSE
+               COMPUTE
+                   WS-CMPY-NET-TTL = WS-CMPY-NET-TTL
+                       + WS-BRN-NET-TTL.
+           IF WS-CMPY-COMM-TTL = 0 THEN
+               COMPUTE
+                   WS-CMPY-COMM-TTL = WS-BRN-COMM-TTL
+           ELSE
+               COMPUTE
+                   WS-CMPY-COMM-TTL = WS-CMPY-COMM-TTL
+                       + WS-BRN-COMM-TTL.
+
+       W400-MOVE-COMPANY-TOTALS.
+           MOVE WS-CMPY-GRS-TTL         TO WS-CMPY-GRS-TTL-ST.
+           MOVE WS-CMPY-RTRN-TTL        TO WS-CMPY-RTRN-TTL-ST.
+           MOVE WS-CMPY-NET-TTL         TO WS-CMPY-NET-TTL-ST.
+           MOVE WS-CMPY-COMM-TTL        TO WS-CMPY-COMM-TTL-ST.
+           MOVE WS-COMPANY-TOTALS-8     TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+
+       W500-DOUBLE-LINES.
+           MOVE WS-DOUBLE-LINES-9       TO PRINT-AREA.
+           WRITE PRINT-AREA             AFTER ADVANCING 1 LINE.
+
+       R000-READ-SLSPRSN-RCRD.
+           READ SALESMAST AT END
+               SET WS-SLSMST-EOF TO TRUE.
+           COMPUTE
+               WS-SLSPRSN-COUNT = WS-SLSPRSN-COUNT + 1. 
